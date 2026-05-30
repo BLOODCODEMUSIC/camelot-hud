@@ -53,13 +53,13 @@
     transition:background .3s ease;
   }
   .app{filter:var(--app-filter);transition:filter .3s ease;}
-  .app-layout{width:min(98vw,98vh,600px);aspect-ratio:1;display:flex;flex-direction:column;padding:14px;gap:5px;}
+  .app-layout{width:min(100vw,100vh,600px);height:min(100vw,100vh,600px);max-width:600px;max-height:600px;display:flex;flex-direction:column;padding:16px 18px;gap:5px;overflow:hidden;}
 
-  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
   .keybox,.bpmbox{padding:3px 8px;border:1.6px solid transparent;border-radius:11px;}
   .keybox{transition:opacity .2s ease, border-color .15s, box-shadow .15s;}
-  .bpmbox{position:relative;z-index:3;transform-origin:bottom right;transition:transform .25s ease, opacity .2s ease, border-color .15s, box-shadow .15s;}
-  body[data-focus="bpm"] .bpmbox{transform:scale(1.55);}
+  .bpmbox{position:relative;z-index:3;transform-origin:top right;transition:transform .22s ease, opacity .2s ease, border-color .15s, box-shadow .15s;}
+  body[data-focus="bpm"] .bpmbox{transform:scale(1.32);}
   body[data-focus="bpm"] .keybox{opacity:.6;}
   body[data-focus="key"] .bpmbox{opacity:.62;}
   .keybox.focused{border-color:var(--perfect);box-shadow:0 0 12px rgba(0,229,255,.22);}
@@ -120,13 +120,19 @@
   .chip.up{border-color:var(--up);}             .chip.up .c{color:var(--up);}
   .chip.down{border-color:var(--down);}         .chip.down .c{color:var(--down);}
 
-  .foot{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
-  .modepill{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--relative);
-    border:1px solid #3a3320;border-radius:999px;padding:4px 12px;cursor:pointer;transition:box-shadow .15s, border-color .15s;}
+  .foot{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:2px;}
+  .modepill{font-family:inherit;font-size:15px;font-weight:800;letter-spacing:1px;color:var(--relative);
+    background:rgba(255,196,0,.08);border:2px solid var(--relative);border-radius:999px;padding:7px 18px;cursor:pointer;
+    transition:box-shadow .15s, border-color .15s, transform .1s;}
   .modepill:active{transform:scale(.96);}
-  .modepill.focused{border-color:var(--relative);box-shadow:0 0 12px rgba(255,196,0,.35);}
-  .legend{text-align:center;font-size:8px;color:var(--ink-dim);letter-spacing:.3px;}
-  body[data-mode="outside"] .legend{color:var(--ink-dim);}
+  .modepill.focused{box-shadow:0 0 16px rgba(255,196,0,.6);}
+  .legend{text-align:center;font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.3px;line-height:1.4;opacity:.92;}
+  .legend b{color:var(--perfect);font-weight:800;}
+  /* daylight: push both to maximum brightness */
+  body[data-mode="outside"] .modepill{background:rgba(255,210,26,.18);color:#fff;border-color:#ffd21a;}
+  body[data-mode="outside"] .legend{color:#fff;opacity:1;font-weight:700;}
+  /* night: warm but still clearly readable */
+  body[data-mode="night"] .legend{color:var(--ink);opacity:.95;}
 
   /* ===== arcade / rhythm-game layer ===== */
   .app{position:relative;}
@@ -366,7 +372,7 @@ window.addEventListener("keydown",e=>{
 });
 
 document.getElementById("hint").innerHTML=
-  "◄ ► adjust · ▲ ▼ A/B · tempo · select ● next panel &nbsp;·&nbsp; Neural Band → D-pad";
+  "<b>◄ ►</b> adjust &nbsp; <b>▲ ▼</b> A/B · tempo &nbsp; <b>● select</b> next panel";
 
 /* ===== rhythm-game beat engine — paced by selected BPM ===== */
 const AMP={inside:1, outside:.32, night:.7};
