@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Camelot HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  /* ===== CLUB (inside) — default ===== */
+  :root{
+    --seg:#15181f; --seg-stroke:#262b35;
+    --ink:#e8edf5; --ink-dim:#566073; --ink-mid:#8a93a3;
+    --perfect:#00e5ff; --relative:#ffc400; --up:#4ade80; --down:#38bdf8;
+    --cursor:#ffffff;
+    --code-shadow:0 0 14px rgba(0,229,255,.45);
+    --cursor-glow:6px; --cursor-stroke:3;
+    --seg-stroke-w:1.5; --role-stroke-w:2.5; --dim-opacity:.30;
+    --app-filter:none;
+    --bg1:#0b1a22; --bg2:#000;
+  }
+  /* ===== DAYLIGHT (outside) — max luminance + contrast, no glow ===== */
+  body[data-mode="outside"]{
+    --seg:#2c3445; --seg-stroke:#6c7a93;
+    --ink:#ffffff; --ink-dim:#b9c6d8; --ink-mid:#dde6f2;
+    --perfect:#36ecff; --relative:#ffd21a; --up:#5cff8c; --down:#74d4ff;
+    --cursor:#ffffff;
+    --code-shadow:none;
+    --cursor-glow:0px; --cursor-stroke:4;
+    --seg-stroke-w:2.4; --role-stroke-w:4; --dim-opacity:.55;
+    --app-filter:contrast(1.12) brightness(1.12);
+    --bg1:#1a2330; --bg2:#05080c;
+  }
+  /* ===== NIGHT (outdoor dark) — warm, dim, low blue ===== */
+  body[data-mode="night"]{
+    --seg:#1b130b; --seg-stroke:#3a2c1c;
+    --ink:#eccda0; --ink-dim:#9a7c54; --ink-mid:#c2a070;
+    --perfect:#ff8a4c; --relative:#e0b25e; --up:#ffd9a0; --down:#cf7d49;
+    --cursor:#ffcca0;
+    --code-shadow:0 0 11px rgba(255,138,76,.40);
+    --cursor-glow:5px; --cursor-stroke:3;
+    --seg-stroke-w:1.5; --role-stroke-w:2.6; --dim-opacity:.26;
+    --app-filter:brightness(.82) saturate(.95);
+    --bg1:#170d05; --bg2:#000;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;}
+  body{
+    font-family:"Chakra Petch",ui-monospace,Menlo,monospace;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(120% 80% at 50% 0%, var(--bg1) 0%, var(--bg2) 58%), #000;
+    transition:background .3s ease;
+  }
+  .app{filter:var(--app-filter);transition:filter .3s ease;}
+  .app-layout{width:min(98vw,98vh,600px);aspect-ratio:1;display:flex;flex-direction:column;padding:14px;gap:5px;}
+
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+  .keybox,.bpmbox{padding:3px 8px;border:1.6px solid transparent;border-radius:11px;}
+  .keybox{transition:opacity .2s ease, border-color .15s, box-shadow .15s;}
+  .bpmbox{position:relative;z-index:3;transform-origin:bottom right;transition:transform .25s ease, opacity .2s ease, border-color .15s, box-shadow .15s;}
+  body[data-focus="bpm"] .bpmbox{transform:scale(1.55);}
+  body[data-focus="bpm"] .keybox{opacity:.6;}
+  body[data-focus="key"] .bpmbox{opacity:.62;}
+  .keybox.focused{border-color:var(--perfect);box-shadow:0 0 12px rgba(0,229,255,.22);}
+  .bpmbox.focused{border-color:var(--up);box-shadow:0 0 12px rgba(74,222,128,.22);}
+  .keybox .code{font-size:38px;font-weight:700;letter-spacing:2px;line-height:.95;color:var(--perfect);text-shadow:var(--code-shadow);}
+  .keybox .name{font-size:13px;color:var(--ink-dim);letter-spacing:1px;margin-top:2px;}
+  .bpmbox{text-align:right;}
+  .bpmbox .v{font-size:32px;font-weight:700;line-height:.95;}
+  .bpmbox .u{font-size:11px;color:var(--ink-dim);letter-spacing:2px;}
+
+  .aim{text-align:center;min-height:16px;font-size:12px;letter-spacing:1px;color:var(--cursor);opacity:.9;}
+  .aim.locked{color:var(--ink-dim);opacity:.5;}
+  .aim b{font-weight:700;}
+
+  .wheel-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;}
+  svg{width:100%;height:100%;max-width:420px;max-height:420px;display:block;transition:transform .25s ease, opacity .25s ease;transform-origin:center center;}
+  body[data-focus="key"] svg{transform:scale(1);opacity:1;}
+  body[data-focus="bpm"] svg{transform:scale(.66);opacity:.45;}
+  .seg .fill{fill:var(--seg);stroke:var(--seg-stroke);stroke-width:var(--seg-stroke-w);transition:.16s;}
+  .seg .lbl{fill:var(--ink);font-weight:700;font-size:19px;transition:.16s;}
+  .seg .sub{fill:var(--ink-dim);font-size:9.5px;font-weight:500;transition:.16s;}
+  .wheel .seg[data-role="none"] .fill{opacity:var(--dim-opacity);}
+  .wheel .seg[data-role="none"] .lbl{opacity:calc(var(--dim-opacity) - .02);}
+  .wheel .seg[data-role="none"] .sub{opacity:calc(var(--dim-opacity) - .14);}
+  .seg[data-role="perfect"]  .fill{fill:rgba(0,229,255,.20);stroke:var(--perfect);stroke-width:var(--role-stroke-w);}
+  .seg[data-role="relative"] .fill{fill:rgba(255,196,0,.16);stroke:var(--relative);stroke-width:var(--role-stroke-w);}
+  .seg[data-role="up"]       .fill{fill:rgba(74,222,128,.16);stroke:var(--up);stroke-width:var(--role-stroke-w);}
+  .seg[data-role="down"]     .fill{fill:rgba(56,189,248,.16);stroke:var(--down);stroke-width:var(--role-stroke-w);}
+  /* daylight: brighter role fills so they read in sun */
+  body[data-mode="outside"] .seg[data-role="perfect"]  .fill{fill:rgba(54,236,255,.34);}
+  body[data-mode="outside"] .seg[data-role="relative"] .fill{fill:rgba(255,210,26,.30);}
+  body[data-mode="outside"] .seg[data-role="up"]       .fill{fill:rgba(92,255,140,.30);}
+  body[data-mode="outside"] .seg[data-role="down"]     .fill{fill:rgba(116,212,255,.30);}
+  .seg[data-role="perfect"] .lbl{fill:var(--perfect);} .seg[data-role="relative"] .lbl{fill:var(--relative);}
+  .seg[data-role="up"] .lbl{fill:var(--up);} .seg[data-role="down"] .lbl{fill:var(--down);}
+  .hub{fill:#070809;stroke:var(--seg-stroke);stroke-width:1.5;}
+  body[data-mode="outside"] .hub{fill:#10151d;}
+  body[data-mode="night"] .hub{fill:#0a0603;}
+  .hub-text{fill:var(--ink-dim);font-size:8px;letter-spacing:2px;text-anchor:middle;font-weight:700;}
+  .ring-label{fill:var(--ink-dim);font-size:8px;letter-spacing:1.5px;font-weight:500;}
+
+  /* cursor overlay */
+  #cursorLayer{filter:drop-shadow(0 0 var(--cursor-glow) var(--cursor));transition:opacity .15s;}
+  .wheel.dimcursor #cursorLayer{opacity:.28;}
+  #cursorLayer path,#cursorLayer polygon{fill:none;stroke:var(--cursor);stroke-width:var(--cursor-stroke);animation:pulse 1.1s ease-in-out infinite;}
+  #cursorLayer polygon{fill:var(--cursor);}
+  @keyframes pulse{0%,100%{opacity:.55;}50%{opacity:1;}}
+
+  .reach{text-align:center;font-size:13px;color:var(--ink-mid);letter-spacing:.5px;}
+  .reach b{color:var(--ink);}
+  .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .chip{background:#0e1014;border:1px solid var(--seg-stroke);border-radius:9px;padding:5px 2px;text-align:center;}
+  .chip .r{font-size:7.5px;letter-spacing:.5px;color:var(--ink-dim);}
+  .chip .c{font-size:16px;font-weight:700;line-height:1.05;}
+  .chip .n{font-size:9px;color:var(--ink-dim);}
+  .chip.perfect{border-color:var(--perfect);}  .chip.perfect .c{color:var(--perfect);}
+  .chip.relative{border-color:var(--relative);} .chip.relative .c{color:var(--relative);}
+  .chip.up{border-color:var(--up);}             .chip.up .c{color:var(--up);}
+  .chip.down{border-color:var(--down);}         .chip.down .c{color:var(--down);}
+
+  .foot{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
+  .modepill{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--relative);
+    border:1px solid #3a3320;border-radius:999px;padding:4px 12px;cursor:pointer;transition:box-shadow .15s, border-color .15s;}
+  .modepill:active{transform:scale(.96);}
+  .modepill.focused{border-color:var(--relative);box-shadow:0 0 12px rgba(255,196,0,.35);}
+  .legend{text-align:center;font-size:8px;color:var(--ink-dim);letter-spacing:.3px;}
+  body[data-mode="outside"] .legend{color:var(--ink-dim);}
+
+  /* ===== arcade / rhythm-game layer ===== */
+  .app{position:relative;}
+  .app-layout{position:relative;z-index:1;}
+  .scanlines{position:absolute;inset:0;pointer-events:none;z-index:4;border-radius:18px;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 1px, transparent 1px 3px);
+    opacity:.6;transition:opacity .3s;}
+  body[data-mode="outside"] .scanlines{opacity:0;}
+  body[data-mode="night"] .scanlines{background:repeating-linear-gradient(0deg, rgba(255,170,90,.06) 0 1px, transparent 1px 3px);}
+
+  /* arcade numerals + beat pulse */
+  .keybox .code,.bpmbox .v{font-family:"Orbitron","Chakra Petch",sans-serif;font-weight:800;}
+  .keybox .code{transform-origin:left center;transform:scale(calc(1 + var(--beat,0)*.05));}
+  .bpmbox .v{transform-origin:right center;transform:scale(calc(1 + var(--beat,0)*.045));}
+
+  /* chips → neon rhythm lanes */
+  .chip .g{font-size:15px;line-height:1;margin-bottom:1px;color:var(--ink-dim);}
+  .chip.perfect .g{color:var(--perfect);} .chip.relative .g{color:var(--relative);}
+  .chip.up .g{color:var(--up);} .chip.down .g{color:var(--down);}
+  .chip.perfect {box-shadow:0 0 calc(var(--beat,0)*16px) rgba(0,229,255,.7);}
+  .chip.relative{box-shadow:0 0 calc(var(--beat,0)*14px) rgba(255,196,0,.6);}
+  .chip.up      {box-shadow:0 0 calc(var(--beat,0)*14px) rgba(74,222,128,.6);}
+  .chip.down    {box-shadow:0 0 calc(var(--beat,0)*14px) rgba(56,189,248,.6);}
+
+  /* beat ring + hit flash */
+  #beatRing{fill:none;stroke:var(--perfect);}
+  .beatdots{display:flex;gap:5px;justify-content:flex-end;margin-top:5px;}
+  .beatdots span{width:7px;height:7px;border-radius:50%;background:var(--seg-stroke);
+    transition:background .04s linear, box-shadow .04s linear, transform .04s linear;}
+  .beatdots span.on{background:var(--ink-mid);transform:scale(1.15);}
+  .beatdots span.on.down{background:var(--perfect);box-shadow:0 0 8px var(--perfect);transform:scale(1.45);}
+  @keyframes hitflash{0%{opacity:.95;}100%{opacity:0;}}
+  @keyframes hitscale{0%{r:62;}100%{r:120;}}
+  #hitLayer circle{fill:none;stroke:var(--cursor);stroke-width:3;opacity:0;}
+  #hitLayer.fire circle{animation:hitflash .36s ease-out, hitscale .36s ease-out;}
+</style>
+</head>
+<body data-mode="inside" data-focus="key">
+ <div class="app">
+  <div class="scanlines"></div>
+  <div class="app-layout">
+    <div class="top">
+      <div class="keybox"><div class="code" id="code">8A</div><div class="name" id="name">A minor</div></div>
+      <div class="bpmbox"><div class="v" id="bpm">128</div><div class="u">BPM</div>
+        <div class="beatdots" id="beatdots"><span></span><span></span><span></span><span></span></div>
+      </div>
+    </div>
+
+    <div class="aim" id="aim"></div>
+
+    <div class="wheel-wrap"><svg id="wheel" class="wheel" viewBox="0 0 400 400" aria-label="Camelot wheel"></svg></div>
+
+    <div class="reach" id="reach"></div>
+
+    <div class="chips" id="chips">
+      <div class="chip" data-slot="perfect"><div class="g">◎</div><div class="r">PERFECT</div><div class="c">—</div><div class="n"></div></div>
+      <div class="chip" data-slot="relative"><div class="g">◆</div><div class="r">RELATIVE</div><div class="c">—</div><div class="n"></div></div>
+      <div class="chip" data-slot="up"><div class="g">▲</div><div class="r">+1</div><div class="c">—</div><div class="n"></div></div>
+      <div class="chip" data-slot="down"><div class="g">▼</div><div class="r">−1</div><div class="c">—</div><div class="n"></div></div>
+    </div>
+
+    <div class="foot">
+      <div class="modepill" id="modeBtn">◐ CLUB</div>
+      <div class="legend" id="hint"></div>
+    </div>
+  </div>
+ </div>
+
+<script>
+/* ===== data ===== */
+const KEYS={1:{A:"A♭m",B:"B"},2:{A:"E♭m",B:"F♯"},3:{A:"B♭m",B:"D♭"},4:{A:"Fm",B:"A♭"},
+5:{A:"Cm",B:"E♭"},6:{A:"Gm",B:"B♭"},7:{A:"Dm",B:"F"},8:{A:"Am",B:"C"},
+9:{A:"Em",B:"G"},10:{A:"Bm",B:"D"},11:{A:"F♯m",B:"A"},12:{A:"C♯m",B:"E"}};
+const CX=200,CY=200,RINGS={B:{rOut:190,rIn:132,rLbl:161},A:{rOut:128,rIn:74,rLbl:101}};
+const NS="http://www.w3.org/2000/svg";
+const wheel=document.getElementById("wheel");
+const keyboxEl=document.querySelector(".keybox");
+const bpmboxEl=document.querySelector(".bpmbox");
+const bpmUnitEl=document.querySelector(".bpmbox .u");
+const polar=(r,d)=>{const a=(d-90)*Math.PI/180;return[CX+r*Math.cos(a),CY+r*Math.sin(a)];};
+function annular(rIn,rOut,a0,a1){const[x1,y1]=polar(rOut,a0),[x2,y2]=polar(rOut,a1),[x3,y3]=polar(rIn,a1),[x4,y4]=polar(rIn,a0);const lg=(a1-a0)>180?1:0;return`M${x1} ${y1} A${rOut} ${rOut} 0 ${lg} 1 ${x2} ${y2} L${x3} ${y3} A${rIn} ${rIn} 0 ${lg} 0 ${x4} ${y4} Z`;}
+const longName=s=>s.endsWith("m")?s.slice(0,-1)+" minor":s+" major";
+function el(t,a,txt){const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);if(txt!=null)n.textContent=txt;return n;}
+
+let cursorLayer, beatRing, hitLayer;
+function buildWheel(){
+  for(let n=1;n<=12;n++){const c=(n%12)*30,a0=c-15,a1=c+15;
+    for(const L of["B","A"]){const R=RINGS[L];const g=el("g",{class:"seg","data-id":`${n}${L}`,"data-num":n,"data-letter":L});
+      g.appendChild(el("path",{class:"fill",d:annular(R.rIn,R.rOut,a0,a1)}));
+      const[lx,ly]=polar(R.rLbl,c);
+      g.appendChild(el("text",{class:"lbl",x:lx,y:ly,"text-anchor":"middle","dominant-baseline":"central"},`${n}${L}`));
+      g.addEventListener("click",()=>{state.sel={num:n,letter:L};setFocus("key");hitFlash();render();});
+      wheel.appendChild(g);}}
+  const hub=el("circle",{class:"hub",cx:CX,cy:CY,r:60,style:"cursor:pointer"});
+  hub.addEventListener("click",()=>{setFocus("key");setRing(state.sel.letter==="A"?"B":"A");}); // tap centre = flip A/B
+  wheel.appendChild(hub);
+  wheel.appendChild(el("text",{class:"hub-text",x:CX,y:CY+3,style:"pointer-events:none"},"CAMELOT"));
+  wheel.appendChild(el("text",{class:"ring-label",x:CX,y:16,"text-anchor":"middle"},"B · MAJOR"));
+  beatRing=el("circle",{id:"beatRing",cx:CX,cy:CY,r:60,"stroke-width":2,opacity:0});wheel.appendChild(beatRing);
+  hitLayer=el("g",{id:"hitLayer"});hitLayer.appendChild(el("circle",{cx:CX,cy:CY,r:62}));wheel.appendChild(hitLayer);
+  cursorLayer=el("g",{id:"cursorLayer"});wheel.appendChild(cursorLayer);
+}
+
+/* ===== state ===== */
+const TEMPOS=[0.06,0.10,0.16];   // CDJ detents; WIDE (±100%) deferred to a later version
+const tempoLabel=r=>"±"+Math.round(r*100)+"%";
+// focus = which panel the D-pad drives: "key" | "bpm" | "mode"
+const state={sel:{num:8,letter:"A"}, bpm:128, tempoIdx:0, modeIdx:0, focus:"key", _lastStep:0};
+
+const neigh=()=>{const{num,letter}=state.sel;return{up:num===12?1:num+1,down:num===1?12:num-1,other:letter==="A"?"B":"A"};};
+function roleOf(code){
+  const m=code.match(/^(\d+)([AB])$/);if(!m)return"none";
+  const n=+m[1],L=m[2],{num,letter}=state.sel,{up,down,other}=neigh();
+  if(n===num&&L===letter)return"perfect";
+  if(n===num&&L===other)return"relative";
+  if(n===up&&L===letter)return"up";
+  if(n===down&&L===letter)return"down";
+  return"none";
+}
+function reachText(){const r=TEMPOS[state.tempoIdx],t=state.bpm;
+  return `reach <b>${Math.round(t/(1+r))}–${Math.round(t/(1-r))} BPM</b>`;}
+function setChip(slot,n,L){const c=document.querySelector(`.chip[data-slot="${slot}"]`);c.className=`chip ${slot}`;
+  c.querySelector(".c").textContent=`${n}${L}`;c.querySelector(".n").textContent=KEYS[n][L];}
+
+function drawCursor(){
+  cursorLayer.innerHTML="";
+  const{num,letter}=state.sel,R=RINGS[letter],c=(num%12)*30,a0=c-15,a1=c+15;
+  cursorLayer.appendChild(el("path",{d:annular(R.rIn,R.rOut,a0,a1)}));
+  // outward caret pointing at the selected segment
+  const[px,py]=polar(R.rOut+9,c),[lx,ly]=polar(R.rOut+19,c-3.2),[rx,ry]=polar(R.rOut+19,c+3.2);
+  cursorLayer.appendChild(el("polygon",{points:`${px},${py} ${lx},${ly} ${rx},${ry}`}));
+}
+
+function render(){
+  wheel.querySelectorAll(".seg").forEach(g=>g.dataset.role=roleOf(g.dataset.id));
+  drawCursor();
+  const{num,letter}=state.sel,{up,down,other}=neigh();
+  document.getElementById("code").textContent=`${num}${letter}`;
+  document.getElementById("name").textContent=longName(KEYS[num][letter]);
+  document.getElementById("bpm").textContent=state.bpm;
+  document.getElementById("reach").innerHTML=`${tempoLabel(TEMPOS[state.tempoIdx])} · ${reachText()}`;
+  setChip("perfect",num,letter);setChip("relative",num,other);setChip("up",up,letter);setChip("down",down,letter);
+
+  // focus indicators
+  const f=state.focus, isKey=f==="key", isBpm=f==="bpm", isMode=f==="mode";
+  document.body.dataset.focus=f;
+  keyboxEl.classList.toggle("focused",isKey);
+  bpmboxEl.classList.toggle("focused",isBpm);
+  wheel.classList.toggle("dimcursor",!isKey);
+  bpmUnitEl.textContent=isBpm?"◄ BPM ►":"BPM";
+  const pill=document.getElementById("modeBtn"); if(pill)pill.classList.toggle("focused",isMode);
+
+  // status line — reflects the focused panel + its D-pad mapping
+  const aim=document.getElementById("aim");
+  aim.className="aim";
+  if(isBpm)        aim.innerHTML=`BPM — ◄ ► dial · ▲ ▼ tempo · ● next`;
+  else if(isMode)  aim.innerHTML=`VENUE — ◄ ► change · ● next`;
+  else             aim.innerHTML=`KEY <b>${num}${letter}</b> — ◄ ► rotate · ▲ ▼ A/B · ● next`;
+}
+
+/* ===== D-pad actions (the EMG band maps gestures to these arrow keys + select) ===== */
+const clampBpm=v=>Math.max(40,Math.min(220,v));
+const FOCI=["key","bpm","mode"];
+
+function rotateKey(dir){ state.sel.num=((state.sel.num-1+dir+12)%12)+1; hitFlash(); render(); }
+function setRing(letter){ if(state.sel.letter!==letter){ state.sel.letter=letter; hitFlash(); } render(); }
+function bpmDial(dir){                                   // accelerating: fast repeats = bigger step
+  const now=performance.now(), dt=now-state._lastStep; state._lastStep=now;
+  const step= dt<70?4 : dt<140?2 : 1;
+  state.bpm=clampBpm(state.bpm+dir*step); render();
+}
+function bpmAdj(d){state.bpm=clampBpm(state.bpm+d);render();}   // direct ±1 (mouse fine-tune)
+function tempoStep(dir){state.tempoIdx=(state.tempoIdx+dir+TEMPOS.length)%TEMPOS.length;render();}
+function setFocus(f){state.focus=f;render();}
+function nextPanel(){ const i=FOCI.indexOf(state.focus); setFocus(FOCI[(i+1)%FOCI.length]); }
+
+/* ◄ ► : adjust the focused panel */
+function dpadX(dir){
+  if(state.focus==="bpm")  return bpmDial(dir);
+  if(state.focus==="mode") return cycleMode(dir);
+  return rotateKey(dir);
+}
+/* ▲ ▼ : the second axis (dir = +1 up, -1 down) */
+function dpadY(dir){
+  if(state.focus==="bpm")  return tempoStep(dir);     // ▲ wider, ▼ narrower
+  if(state.focus==="key")  return setRing(dir>0?"B":"A"); // ▲ major/outer, ▼ minor/inner
+  // mode panel: ▲▼ unused
+}
+
+/* display modes for venue lighting */
+const MODES=[
+  {id:"inside", label:"◐ CLUB"},
+  {id:"outside",label:"☀ DAYLIGHT"},
+  {id:"night",  label:"☾ NIGHT"}
+];
+function cycleMode(dir=1){
+  state.modeIdx=(state.modeIdx+dir+MODES.length)%MODES.length;
+  const m=MODES[state.modeIdx];
+  document.body.dataset.mode=m.id;
+  const el=document.getElementById("modeBtn"); if(el)el.textContent=m.label;
+}
+
+/* ===== direct manipulation (mouse/tap — browser convenience; glasses use the D-pad) ===== */
+modeBtn.onclick=()=>{setFocus("mode");cycleMode(1);};
+keyboxEl.addEventListener("click",()=>setFocus("key"));
+bpmboxEl.addEventListener("click",()=>setFocus("bpm"));
+document.getElementById("reach").addEventListener("click",()=>{setFocus("bpm");tempoStep(1);});
+
+/* mouse wheel: over the wheel rotates the key, over BPM dials BPM */
+wheel.addEventListener("wheel",e=>{e.preventDefault();setFocus("key");rotateKey(e.deltaY>0?1:-1);},{passive:false});
+bpmboxEl.addEventListener("wheel",e=>{e.preventDefault();setFocus("bpm");bpmDial(e.deltaY>0?1:-1);},{passive:false});
+
+/* =====================================================================
+   INPUT MODEL — Meta Ray-Ban Display web apps
+   The Neural Band does NOT expose a raw "twist" value to web apps. The
+   system translates EMG gestures into D-PAD ARROW KEYS + a SELECT. So a
+   web app just handles keydown for ArrowLeft/Right/Up/Down and Enter —
+   which is exactly what's wired below, meaning this runs on-device as-is.
+
+     ◄ ► (ArrowLeft/Right)  → dpadX()   adjust focused panel
+     ▲ ▼ (ArrowUp/Down)     → dpadY()   second axis (A/B ring · tempo)
+     select (Enter)         → nextPanel()  cycle KEY → BPM → MODE
+
+   (Select is assumed to be Enter — the pinch/click. Confirm against the
+   kit's key map when you wire it; everything else is standard arrow keys.)
+   ===================================================================== */
+window.addEventListener("keydown",e=>{
+  switch(e.key){
+    case"ArrowLeft":  dpadX(-1); break;
+    case"ArrowRight": dpadX(1);  break;
+    case"ArrowUp":    dpadY(1);  break;   // up = major/outer ring · wider tempo
+    case"ArrowDown":  dpadY(-1); break;   // down = minor/inner ring · narrower tempo
+    case"Enter":case" ": nextPanel(); break;   // select = next panel
+    default:return;
+  }
+  e.preventDefault();
+});
+
+document.getElementById("hint").innerHTML=
+  "◄ ► adjust · ▲ ▼ A/B · tempo · select ● next panel &nbsp;·&nbsp; Neural Band → D-pad";
+
+/* ===== rhythm-game beat engine — paced by selected BPM ===== */
+const AMP={inside:1, outside:.32, night:.7};
+const reduceMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const rootStyle=document.documentElement.style;
+const beatDots=[...document.querySelectorAll("#beatdots span")];
+let lastT=null, beatPhase=0, beatIdx=0;
+
+function onBeat(){
+  beatDots.forEach((d,i)=>{
+    const on=i===beatIdx;
+    d.classList.toggle("on",on);
+    d.classList.toggle("down",on&&beatIdx===0);
+  });
+}
+function beatLoop(now){
+  if(lastT===null)lastT=now;
+  const dt=now-lastT; lastT=now;
+  const beatMs=60000/state.bpm;                 // ← period follows the selected BPM
+  const amp=reduceMotion?0:(AMP[MODES[state.modeIdx].id]??1);
+  beatPhase+=dt/beatMs;
+  while(beatPhase>=1){ beatPhase-=1; beatIdx=(beatIdx+1)%4; if(!reduceMotion)onBeat(); }
+  const accent=beatIdx===0?1.4:1;               // emphasise the "1" of each bar
+  const env=Math.pow(1-beatPhase,2.6)*amp*accent;
+  rootStyle.setProperty("--beat", env.toFixed(3));
+  if(beatRing){
+    beatRing.setAttribute("r",(60+beatPhase*30*accent).toFixed(1));
+    beatRing.setAttribute("opacity",((1-beatPhase)*0.4*amp*accent).toFixed(3));
+  }
+  requestAnimationFrame(beatLoop);
+}
+function hitFlash(){
+  if(!hitLayer)return;
+  hitLayer.classList.remove("fire");
+  void hitLayer.getBBox();            // force reflow so the animation restarts
+  hitLayer.classList.add("fire");
+}
+
+buildWheel();render();
+requestAnimationFrame(beatLoop);
+</script>
+</body>
+</html>
