@@ -59,6 +59,23 @@
   .app{filter:var(--app-filter);transition:filter .3s ease;}
   .app-layout{width:min(100vw,100vh,600px);height:min(100vw,100vh,600px);max-width:600px;max-height:600px;display:flex;flex-direction:column;padding:16px 18px;gap:5px;overflow:hidden;}
 
+  /* ===== FF-style energy bar ===== */
+  .energybar{display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;
+    border:1.6px dashed var(--seg-stroke);border-radius:11px;background:rgba(255,255,255,.02);}
+  .energybar.focused{border-style:solid;border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);
+    background:rgba(255,255,255,.08);animation:focuspulse 1.4s ease-in-out infinite;}
+  .en-label{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--ink-dim);flex:0 0 auto;}
+  .en-cells{flex:1;display:flex;gap:3px;height:18px;}
+  .en-cell{flex:1;border-radius:3px;background:var(--seg);border:1px solid var(--seg-stroke);
+    transition:background .12s ease, box-shadow .12s ease;}
+  /* lit cells glow, and breathe on the beat via the global --beat var */
+  .en-cell.lit{border-color:transparent;
+    box-shadow:0 0 calc(2px + var(--beat,0)*9px) var(--cellglow);}
+  .en-num{font-family:"Orbitron","Chakra Petch",sans-serif;font-size:16px;font-weight:800;
+    color:var(--ink);flex:0 0 auto;min-width:20px;text-align:right;}
+  body[data-mode="outside"] .energybar{border-color:#9fb0c8;}
+  body[data-mode="outside"] .en-num{color:#fff;}
+
   .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
   /* resting state: a faint dashed outline marks every SELECTABLE control */
   .keybox,.bpmbox{padding:5px 10px;border:1.6px dashed var(--seg-stroke);border-radius:11px;background:rgba(255,255,255,.02);}
@@ -187,9 +204,14 @@
  <div class="app">
   <div class="scanlines"></div>
   <div class="app-layout">
+    <div class="energybar" id="energyBar">
+      <span class="en-label" id="enLabel">ENERGY · AUTO</span>
+      <span class="en-cells" id="enCells"></span>
+      <span class="en-num" id="enNum">7</span>
+    </div>
     <div class="top">
       <div class="keybox"><div class="code" id="code">8A</div><div class="name" id="name">A minor</div></div>
-      <div class="bpmbox"><div class="v" id="bpm">128</div><div class="u">BPM</div>
+      <div class="bpmbox"><div class="v" id="bpm">160</div><div class="u">BPM</div>
         <div class="beatdots" id="beatdots"><span></span><span></span><span></span><span></span></div>
       </div>
     </div>
@@ -252,7 +274,7 @@ function buildWheel(){
 const TEMPOS=[0.06,0.10,0.16];   // CDJ detents; WIDE (±100%) deferred to a later version
 const tempoLabel=r=>"±"+Math.round(r*100)+"%";
 // ctrl = index into CONTROLS of the currently focused control
-const state={sel:{num:8,letter:"A"}, bpm:128, tempoIdx:0, modeIdx:0, ctrl:0, _lastStep:0};
+const state={sel:{num:8,letter:"A"}, bpm:160, tempoIdx:0, modeIdx:0, ctrl:0, energy:5, energyAuto:true, _lastStep:0};
 
 const neigh=()=>{const{num,letter}=state.sel;return{up:num===12?1:num+1,down:num===1?12:num-1,other:letter==="A"?"B":"A"};};
 function roleOf(code){
@@ -299,12 +321,44 @@ function render(){
   const ringBtn=document.getElementById("ringBtn"); if(ringBtn){ringBtn.classList.toggle("focused",cur==="ring"); ringBtn.textContent=letter+" · A/B";}
   const tempoBtn=document.getElementById("tempoBtn"); if(tempoBtn){tempoBtn.classList.toggle("focused",cur==="tempo"); tempoBtn.textContent=tempoLabel(TEMPOS[state.tempoIdx]);}
   const modeB=document.getElementById("modeBtn"); if(modeB)modeB.classList.toggle("focused",cur==="mode");
+  renderEnergy(cur==="energy");
+}
+
+/* cyan(low) → magenta(high) gradient per cell */
+function energyColor(i,total){
+  const t=i/(total-1);                 // 0..1 across the bar
+  // cyan #00e5ff → magenta #ff3df0
+  const r=Math.round(0x00+(0xff-0x00)*t);
+  const g=Math.round(0xe5+(0x3d-0xe5)*t);
+  const b=Math.round(0xff+(0xf0-0xff)*t);
+  return `rgb(${r},${g},${b})`;
+}
+const ENERGY_CELLS=10;
+function buildEnergy(){
+  const wrap=document.getElementById("enCells"); if(!wrap)return;
+  wrap.innerHTML="";
+  for(let i=0;i<ENERGY_CELLS;i++){
+    const c=document.createElement("span"); c.className="en-cell"; wrap.appendChild(c);
+  }
+}
+function renderEnergy(focused){
+  const bar=document.getElementById("energyBar"); if(bar)bar.classList.toggle("focused",focused);
+  const cells=document.querySelectorAll("#enCells .en-cell");
+  cells.forEach((c,i)=>{
+    const lit=i<state.energy;
+    c.classList.toggle("lit",lit);
+    c.style.background = lit ? energyColor(i,ENERGY_CELLS) : "";
+    c.style.setProperty("--cellglow", lit ? energyColor(i,ENERGY_CELLS) : "transparent");
+  });
+  const num=document.getElementById("enNum"); if(num)num.textContent=state.energy;
+  const lab=document.getElementById("enLabel"); if(lab)lab.textContent=state.energyAuto?"ENERGY · AUTO":"ENERGY";
+  const bar2=document.getElementById("energyBar"); if(bar2)bar2.classList.toggle("manual",!state.energyAuto);
 }
 
 /* ===== focusable-control model =====
    Left/right = cycle ONLY through selectable controls.
    Up/down = adjust the focused control. Select = activate it. */
-const CONTROLS=["key","ring","bpm","tempo","mode"];
+const CONTROLS=["energy","key","ring","bpm","tempo","mode"];
 const clampBpm=v=>Math.max(40,Math.min(220,v));
 
 function rotateKey(dir){ state.sel.num=((state.sel.num-1+dir+12)%12)+1; hitFlash(); render(); }
@@ -313,9 +367,11 @@ function flipRing(){ setRing(state.sel.letter==="A"?"B":"A"); }
 function bpmDial(dir){
   const now=performance.now(), dt=now-state._lastStep; state._lastStep=now;
   const step= dt<70?4 : dt<140?2 : 1;
-  state.bpm=clampBpm(state.bpm+dir*step); render();
+  state.bpm=clampBpm(state.bpm+dir*step);
+  if(state.energyAuto) state.energy=energyFromBpm(state.bpm);   // auto-suggest follows BPM
+  render();
 }
-function bpmAdj(d){state.bpm=clampBpm(state.bpm+d);render();}
+function bpmAdj(d){state.bpm=clampBpm(state.bpm+d); if(state.energyAuto) state.energy=energyFromBpm(state.bpm); render();}
 function tempoStep(dir){state.tempoIdx=(state.tempoIdx+dir+TEMPOS.length)%TEMPOS.length;render();}
 
 /* focus movement */
@@ -325,9 +381,22 @@ function focusControl(name){ const i=CONTROLS.indexOf(name); if(i>=0){state.ctrl
 /* ◄ ► : move focus between controls */
 function dpadX(dir){ moveFocus(dir); }
 
+const ENERGY_MAX=10;
+/* map full performing range onto the 10 energy cells (clamped at the ends) */
+const E_BPM_LO=90, E_BPM_HI=200;
+function energyFromBpm(bpm){
+  const t=(bpm-E_BPM_LO)/(E_BPM_HI-E_BPM_LO);          // 0..1 across 120–140
+  return Math.max(1,Math.min(ENERGY_MAX, Math.round(1 + t*(ENERGY_MAX-1))));
+}
+function energyAdj(dir){                                 // manual change = lock, stop auto-following
+  state.energy=Math.max(1,Math.min(ENERGY_MAX,state.energy+dir));
+  state.energyAuto=false; hitFlash(); render();
+}
+
 /* ▲ ▼ : adjust the focused control */
 function dpadY(dir){
   const cur=CONTROLS[state.ctrl];
+  if(cur==="energy") return energyAdj(dir);
   if(cur==="key")   return rotateKey(dir);          // up=clockwise, down=counter
   if(cur==="bpm")   return bpmDial(dir);
   if(cur==="tempo") return tempoStep(dir);
@@ -338,6 +407,7 @@ function dpadY(dir){
 /* select : activate the focused control */
 function dpadSelect(){
   const cur=CONTROLS[state.ctrl];
+  if(cur==="energy"){ state.energyAuto=true; state.energy=energyFromBpm(state.bpm); hitFlash(); return render(); } // select = re-link to BPM
   if(cur==="key")   return rotateKey(1);            // step to next key
   if(cur==="ring")  return flipRing();
   if(cur==="tempo") return tempoStep(1);
@@ -440,7 +510,9 @@ function hitFlash(){
   hitLayer.classList.add("fire");
 }
 
-buildWheel();render();
+buildWheel();buildEnergy();
+if(state.energyAuto) state.energy=energyFromBpm(state.bpm);   // start consistent with BPM
+render();
 requestAnimationFrame(beatLoop);
 
 /* ===== launch splash: play the GIF's full loop once (~4.16s) then fade to HUD ===== */
