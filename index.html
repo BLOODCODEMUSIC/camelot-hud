@@ -124,18 +124,22 @@
   .chip.up{border-color:var(--up);}             .chip.up .c{color:var(--up);}
   .chip.down{border-color:var(--down);}         .chip.down .c{color:var(--down);}
 
-  .foot{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:2px;}
-  .modepill{font-family:inherit;font-size:15px;font-weight:800;letter-spacing:1px;color:var(--relative);
-    background:rgba(255,196,0,.08);border:2px solid var(--relative);border-radius:999px;padding:7px 18px;cursor:pointer;
-    transition:box-shadow .15s, border-color .15s, transform .1s;}
-  .modepill:active{transform:scale(.96);}
-  .modepill.focused{box-shadow:0 0 16px rgba(255,196,0,.6);}
-  .legend{text-align:center;font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.3px;line-height:1.4;opacity:.92;}
+  .ctlrow{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:2px;}
+  .ctlbtn{font-family:inherit;font-size:15px;font-weight:800;letter-spacing:1px;color:var(--ink-mid);
+    background:rgba(255,255,255,.04);border:2px solid var(--seg-stroke);border-radius:999px;padding:7px 16px;cursor:pointer;
+    transition:box-shadow .15s, border-color .15s, color .15s, transform .1s;min-width:64px;text-align:center;}
+  .ctlbtn:active{transform:scale(.96);}
+  /* the FOCUSED control gets a strong, unmistakable highlight (this is the focus ring) */
+  .ctlbtn.focused{color:var(--ink);border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);background:rgba(255,255,255,.1);}
+  .modepill{color:var(--relative);border-color:var(--relative);background:rgba(255,196,0,.08);}
+  .modepill.focused{color:#fff;border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);}
+  .legend{text-align:center;font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.3px;line-height:1.4;opacity:.92;margin-top:4px;}
   .legend b{color:var(--perfect);font-weight:800;}
-  /* daylight: push both to maximum brightness */
-  body[data-mode="outside"] .modepill{background:rgba(255,210,26,.18);color:#fff;border-color:#ffd21a;}
+  /* daylight: push to maximum brightness */
+  body[data-mode="outside"] .ctlbtn{color:#fff;border-color:#9fb0c8;}
+  body[data-mode="outside"] .ctlbtn.focused{border-color:#fff;box-shadow:0 0 18px #fff;}
+  body[data-mode="outside"] .modepill{background:rgba(255,210,26,.18);border-color:#ffd21a;}
   body[data-mode="outside"] .legend{color:#fff;opacity:1;font-weight:700;}
-  /* night: warm but still clearly readable */
   body[data-mode="night"] .legend{color:var(--ink);opacity:.95;}
 
   /* ===== arcade / rhythm-game layer ===== */
@@ -172,9 +176,16 @@
   @keyframes hitscale{0%{r:62;}100%{r:120;}}
   #hitLayer circle{fill:none;stroke:var(--cursor);stroke-width:3;opacity:0;}
   #hitLayer.fire circle{animation:hitflash .36s ease-out, hitscale .36s ease-out;}
+
+  /* ===== launch splash ===== */
+  #splash{position:fixed;inset:0;z-index:50;background:#000;display:flex;align-items:center;justify-content:center;
+    transition:opacity .6s ease;}
+  #splash img{width:600px;height:600px;max-width:100vw;max-height:100vh;object-fit:contain;}
+  #splash.done{opacity:0;pointer-events:none;}
 </style>
 </head>
 <body data-mode="inside" data-focus="key">
+ <div id="splash"><img src="splash.gif" alt="Blood Code"></div>
  <div class="app">
   <div class="scanlines"></div>
   <div class="app-layout">
@@ -198,10 +209,12 @@
       <div class="chip" data-slot="down"><div class="g">▼</div><div class="r">−1</div><div class="c">—</div><div class="n"></div></div>
     </div>
 
-    <div class="foot">
-      <div class="modepill" id="modeBtn">◐ CLUB</div>
-      <div class="legend" id="hint"></div>
+    <div class="ctlrow">
+      <div class="ctlbtn" id="ringBtn">A/B</div>
+      <div class="ctlbtn" id="tempoBtn">±6%</div>
+      <div class="ctlbtn modepill" id="modeBtn">◐ CLUB</div>
     </div>
+    <div class="legend" id="hint"></div>
   </div>
  </div>
 
@@ -228,10 +241,10 @@ function buildWheel(){
       g.appendChild(el("path",{class:"fill",d:annular(R.rIn,R.rOut,a0,a1)}));
       const[lx,ly]=polar(R.rLbl,c);
       g.appendChild(el("text",{class:"lbl",x:lx,y:ly,"text-anchor":"middle","dominant-baseline":"central"},`${n}${L}`));
-      g.addEventListener("click",()=>{state.sel={num:n,letter:L};setFocus("key");hitFlash();render();});
+      g.addEventListener("click",()=>{state.sel={num:n,letter:L};focusControl("key");hitFlash();render();});
       wheel.appendChild(g);}}
   const hub=el("circle",{class:"hub",cx:CX,cy:CY,r:60,style:"cursor:pointer"});
-  hub.addEventListener("click",()=>{setFocus("key");setRing(state.sel.letter==="A"?"B":"A");}); // tap centre = flip A/B
+  hub.addEventListener("click",()=>{focusControl("ring");flipRing();}); // tap centre = flip A/B
   wheel.appendChild(hub);
   wheel.appendChild(el("text",{class:"hub-text",x:CX,y:CY+3,style:"pointer-events:none"},"CAMELOT"));
   wheel.appendChild(el("text",{class:"ring-label",x:CX,y:16,"text-anchor":"middle"},"B · MAJOR"));
@@ -243,8 +256,8 @@ function buildWheel(){
 /* ===== state ===== */
 const TEMPOS=[0.06,0.10,0.16];   // CDJ detents; WIDE (±100%) deferred to a later version
 const tempoLabel=r=>"±"+Math.round(r*100)+"%";
-// focus = which panel the D-pad drives: "key" | "bpm" | "mode"
-const state={sel:{num:8,letter:"A"}, bpm:128, tempoIdx:0, modeIdx:0, focus:"key", _lastStep:0};
+// ctrl = index into CONTROLS of the currently focused control
+const state={sel:{num:8,letter:"A"}, bpm:128, tempoIdx:0, modeIdx:0, ctrl:0, _lastStep:0};
 
 const neigh=()=>{const{num,letter}=state.sel;return{up:num===12?1:num+1,down:num===1?12:num-1,other:letter==="A"?"B":"A"};};
 function roleOf(code){
@@ -280,50 +293,72 @@ function render(){
   document.getElementById("reach").innerHTML=`${tempoLabel(TEMPOS[state.tempoIdx])} · ${reachText()}`;
   setChip("perfect",num,letter);setChip("relative",num,other);setChip("up",up,letter);setChip("down",down,letter);
 
-  // focus indicators
-  const f=state.focus, isKey=f==="key", isBpm=f==="bpm", isMode=f==="mode";
-  document.body.dataset.focus=f;
-  keyboxEl.classList.toggle("focused",isKey);
-  bpmboxEl.classList.toggle("focused",isBpm);
-  wheel.classList.toggle("dimcursor",!isKey);
-  bpmUnitEl.textContent=isBpm?"◄ BPM ►":"BPM";
-  const pill=document.getElementById("modeBtn"); if(pill)pill.classList.toggle("focused",isMode);
+  // which control is focused (drives the highlight + the up/down behaviour)
+  const cur=CONTROLS[state.ctrl]||"key";
+  keyboxEl.classList.toggle("focused",cur==="key");
+  bpmboxEl.classList.toggle("focused",cur==="bpm");
+  wheel.classList.toggle("dimcursor",cur!=="key");
+  document.body.dataset.focus = cur==="bpm"?"bpm":"key";
+  bpmUnitEl.textContent = cur==="bpm"?"▲ BPM ▼":"BPM";
+  const ringBtn=document.getElementById("ringBtn"); if(ringBtn){ringBtn.classList.toggle("focused",cur==="ring"); ringBtn.textContent=letter+" · A/B";}
+  const tempoBtn=document.getElementById("tempoBtn"); if(tempoBtn){tempoBtn.classList.toggle("focused",cur==="tempo"); tempoBtn.textContent=tempoLabel(TEMPOS[state.tempoIdx]);}
+  const modeB=document.getElementById("modeBtn"); if(modeB)modeB.classList.toggle("focused",cur==="mode");
 
-  // status line — reflects the focused panel + its D-pad mapping
+  // status line — tells you what ▲▼ and select do on the focused control
   const aim=document.getElementById("aim");
   aim.className="aim";
-  if(isBpm)        aim.innerHTML=`BPM — ◄ ► dial · ▲ ▼ tempo · ● next`;
-  else if(isMode)  aim.innerHTML=`VENUE — ◄ ► change · ● next`;
-  else             aim.innerHTML=`KEY <b>${num}${letter}</b> — ◄ ► rotate · ▲ ▼ A/B · ● next`;
+  const tip={
+    key:`KEY <b>${num}${letter}</b> — ▲▼ rotate · select steps`,
+    ring:`RING ${letter==="A"?"minor":"major"} — select flips A/B`,
+    bpm:`BPM ${state.bpm} — ▲▼ dial`,
+    tempo:`TEMPO ${tempoLabel(TEMPOS[state.tempoIdx])} — select cycles`,
+    mode:`VENUE ${MODES[state.modeIdx].label.replace(/^.\s/,"")} — select cycles`
+  };
+  aim.innerHTML = `◄ ► move &nbsp;·&nbsp; ${tip[cur]||""}`;
 }
 
-/* ===== D-pad actions (the EMG band maps gestures to these arrow keys + select) ===== */
+/* ===== focusable-control model (matches the glasses' native focus system) =====
+   Left/right swipe = move focus along this ring of controls.
+   Up/down = adjust the focused control. Select = activate it. */
+const CONTROLS=["key","ring","bpm","tempo","mode"];
 const clampBpm=v=>Math.max(40,Math.min(220,v));
-const FOCI=["key","bpm","mode"];
 
 function rotateKey(dir){ state.sel.num=((state.sel.num-1+dir+12)%12)+1; hitFlash(); render(); }
 function setRing(letter){ if(state.sel.letter!==letter){ state.sel.letter=letter; hitFlash(); } render(); }
-function bpmDial(dir){                                   // accelerating: fast repeats = bigger step
+function flipRing(){ setRing(state.sel.letter==="A"?"B":"A"); }
+function bpmDial(dir){
   const now=performance.now(), dt=now-state._lastStep; state._lastStep=now;
   const step= dt<70?4 : dt<140?2 : 1;
   state.bpm=clampBpm(state.bpm+dir*step); render();
 }
-function bpmAdj(d){state.bpm=clampBpm(state.bpm+d);render();}   // direct ±1 (mouse fine-tune)
+function bpmAdj(d){state.bpm=clampBpm(state.bpm+d);render();}
 function tempoStep(dir){state.tempoIdx=(state.tempoIdx+dir+TEMPOS.length)%TEMPOS.length;render();}
-function setFocus(f){state.focus=f;render();}
-function nextPanel(){ const i=FOCI.indexOf(state.focus); setFocus(FOCI[(i+1)%FOCI.length]); }
 
-/* ◄ ► : adjust the focused panel */
-function dpadX(dir){
-  if(state.focus==="bpm")  return bpmDial(dir);
-  if(state.focus==="mode") return cycleMode(dir);
-  return rotateKey(dir);
-}
-/* ▲ ▼ : the second axis (dir = +1 up, -1 down) */
+/* focus movement */
+function moveFocus(delta){ state.ctrl=(state.ctrl+delta+CONTROLS.length)%CONTROLS.length; render(); }
+function focusControl(name){ const i=CONTROLS.indexOf(name); if(i>=0){state.ctrl=i; render();} }
+
+/* ◄ ► : move focus between controls */
+function dpadX(dir){ moveFocus(dir); }
+
+/* ▲ ▼ : adjust the focused control */
 function dpadY(dir){
-  if(state.focus==="bpm")  return tempoStep(dir);     // ▲ wider, ▼ narrower
-  if(state.focus==="key")  return setRing(dir>0?"B":"A"); // ▲ major/outer, ▼ minor/inner
-  // mode panel: ▲▼ unused
+  const cur=CONTROLS[state.ctrl];
+  if(cur==="key")   return rotateKey(dir);          // up=clockwise, down=counter
+  if(cur==="bpm")   return bpmDial(dir);
+  if(cur==="tempo") return tempoStep(dir);
+  if(cur==="ring")  return flipRing();
+  if(cur==="mode")  return cycleMode(dir);
+}
+
+/* select : activate the focused control */
+function dpadSelect(){
+  const cur=CONTROLS[state.ctrl];
+  if(cur==="key")   return rotateKey(1);            // step to next key
+  if(cur==="ring")  return flipRing();
+  if(cur==="tempo") return tempoStep(1);
+  if(cur==="mode")  return cycleMode(1);
+  if(cur==="bpm")   return bpmDial(1);
 }
 
 /* display modes for venue lighting */
@@ -339,44 +374,50 @@ function cycleMode(dir=1){
   const el=document.getElementById("modeBtn"); if(el)el.textContent=m.label;
 }
 
-/* ===== direct manipulation (mouse/tap — browser convenience; glasses use the D-pad) ===== */
-modeBtn.onclick=()=>{setFocus("mode");cycleMode(1);};
-keyboxEl.addEventListener("click",()=>setFocus("key"));
-bpmboxEl.addEventListener("click",()=>setFocus("bpm"));
-document.getElementById("reach").addEventListener("click",()=>{setFocus("bpm");tempoStep(1);});
+/* ===== direct manipulation (mouse/tap — browser convenience) ===== */
+modeBtn.onclick=()=>{focusControl("mode");cycleMode(1);};
+document.getElementById("ringBtn").onclick=()=>{focusControl("ring");flipRing();};
+document.getElementById("tempoBtn").onclick=()=>{focusControl("tempo");tempoStep(1);};
+keyboxEl.addEventListener("click",()=>{focusControl("key");rotateKey(1);});
+bpmboxEl.addEventListener("click",()=>focusControl("bpm"));
+document.getElementById("reach").addEventListener("click",()=>{focusControl("tempo");tempoStep(1);});
+/* clicking a wheel segment selects that key directly (already wired in buildWheel) */
 
 /* mouse wheel: over the wheel rotates the key, over BPM dials BPM */
-wheel.addEventListener("wheel",e=>{e.preventDefault();setFocus("key");rotateKey(e.deltaY>0?1:-1);},{passive:false});
-bpmboxEl.addEventListener("wheel",e=>{e.preventDefault();setFocus("bpm");bpmDial(e.deltaY>0?1:-1);},{passive:false});
+wheel.addEventListener("wheel",e=>{e.preventDefault();focusControl("key");rotateKey(e.deltaY>0?1:-1);},{passive:false});
+bpmboxEl.addEventListener("wheel",e=>{e.preventDefault();focusControl("bpm");bpmDial(e.deltaY>0?1:-1);},{passive:false});
 
 /* =====================================================================
    INPUT MODEL — Meta Ray-Ban Display web apps
-   The Neural Band does NOT expose a raw "twist" value to web apps. The
-   system translates EMG gestures into D-PAD ARROW KEYS + a SELECT. So a
-   web app just handles keydown for ArrowLeft/Right/Up/Down and Enter —
-   which is exactly what's wired below, meaning this runs on-device as-is.
+   The glasses translate Neural Band / captouch gestures into standard
+   arrow-key + Enter events, and expect SELECT to act on a focused
+   control. This app keeps its own focus ring (CONTROLS) and handles:
 
-     ◄ ► (ArrowLeft/Right)  → dpadX()   adjust focused panel
-     ▲ ▼ (ArrowUp/Down)     → dpadY()   second axis (A/B ring · tempo)
-     select (Enter)         → nextPanel()  cycle KEY → BPM → MODE
+     ◄ ► (ArrowLeft/Right) → move focus between controls
+     ▲ ▼ (ArrowUp/Down)    → adjust the focused control
+     select (Enter)        → activate the focused control
+     back   (Escape)       → step focus back to the wheel
 
-   (Select is assumed to be Enter — the pinch/click. Confirm against the
-   kit's key map when you wire it; everything else is standard arrow keys.)
+   Every control has a real on-screen highlight, so the select gesture
+   always has a focused target to act on — which is what was missing
+   before (select did nothing because there was no focused element).
    ===================================================================== */
+const DPAD={UP:'ArrowUp',DOWN:'ArrowDown',LEFT:'ArrowLeft',RIGHT:'ArrowRight',SELECT:'Enter',BACK:'Escape'};
 window.addEventListener("keydown",e=>{
   switch(e.key){
-    case"ArrowLeft":  dpadX(-1); break;
-    case"ArrowRight": dpadX(1);  break;
-    case"ArrowUp":    dpadY(1);  break;   // up = major/outer ring · wider tempo
-    case"ArrowDown":  dpadY(-1); break;   // down = minor/inner ring · narrower tempo
-    case"Enter":case" ": nextPanel(); break;   // select = next panel
+    case DPAD.LEFT:   dpadX(-1); break;
+    case DPAD.RIGHT:  dpadX(1);  break;
+    case DPAD.UP:     dpadY(1);  break;
+    case DPAD.DOWN:   dpadY(-1); break;
+    case DPAD.SELECT: case " ": dpadSelect(); break;
+    case DPAD.BACK:   focusControl("key"); break;
     default:return;
   }
   e.preventDefault();
 });
 
 document.getElementById("hint").innerHTML=
-  "<b>◄ ►</b> adjust &nbsp; <b>▲ ▼</b> A/B · tempo &nbsp; <b>● select</b> next panel";
+  "<b>◄ ►</b> move &nbsp; <b>▲ ▼</b> adjust &nbsp; <b>● select</b> activate";
 
 /* ===== rhythm-game beat engine — paced by selected BPM ===== */
 const AMP={inside:1, outside:.32, night:.7};
@@ -417,6 +458,25 @@ function hitFlash(){
 
 buildWheel();render();
 requestAnimationFrame(beatLoop);
+
+/* ===== launch splash: play the GIF's full loop once (~4.16s) then fade to HUD ===== */
+(function(){
+  var splash=document.getElementById("splash");
+  if(!splash)return;
+  var img=splash.querySelector("img");
+  var LOOP_MS=2000;            // ~2s hold, then fade to the HUD
+  var MAX_WAIT=4000;           // safety: never hang on the splash
+  var dismissed=false;
+  function dismiss(){
+    if(dismissed)return; dismissed=true;
+    splash.classList.add("done");
+    setTimeout(function(){ if(splash&&splash.parentNode)splash.remove(); }, 650);
+  }
+  function startTimer(){ setTimeout(dismiss, LOOP_MS); }
+  if(img.complete) startTimer();
+  else { img.addEventListener("load", startTimer); img.addEventListener("error", dismiss); }
+  setTimeout(dismiss, MAX_WAIT); // hard fallback so the app always appears
+})();
 </script>
 </body>
 </html>
