@@ -60,23 +60,22 @@
   .app-layout{width:min(100vw,100vh,600px);height:min(100vw,100vh,600px);max-width:600px;max-height:600px;display:flex;flex-direction:column;padding:16px 18px;gap:5px;overflow:hidden;}
 
   .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
-  .keybox,.bpmbox{padding:3px 8px;border:1.6px solid transparent;border-radius:11px;}
+  /* resting state: a faint dashed outline marks every SELECTABLE control */
+  .keybox,.bpmbox{padding:5px 10px;border:1.6px dashed var(--seg-stroke);border-radius:11px;background:rgba(255,255,255,.02);}
   .keybox{transition:opacity .2s ease, border-color .15s, box-shadow .15s;}
   .bpmbox{position:relative;z-index:3;transform-origin:top right;transition:transform .22s ease, opacity .2s ease, border-color .15s, box-shadow .15s;}
   body[data-focus="bpm"] .bpmbox{transform:scale(1.32);}
-  body[data-focus="bpm"] .keybox{opacity:.6;}
-  body[data-focus="key"] .bpmbox{opacity:.62;}
-  .keybox.focused{border-color:var(--perfect);box-shadow:0 0 12px rgba(0,229,255,.22);}
-  .bpmbox.focused{border-color:var(--up);box-shadow:0 0 12px rgba(74,222,128,.22);}
+  body[data-focus="bpm"] .keybox{opacity:.55;}
+  body[data-focus="key"] .bpmbox{opacity:.55;}
+  /* focused state: solid bright pulsing glow = the active control */
+  .keybox.focused,.bpmbox.focused{border-style:solid;border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);background:rgba(255,255,255,.08);animation:focuspulse 1.4s ease-in-out infinite;}
+  @keyframes focuspulse{0%,100%{box-shadow:0 0 12px var(--cursor);}50%{box-shadow:0 0 22px var(--cursor);}}
+  @media (prefers-reduced-motion: reduce){ .keybox.focused,.bpmbox.focused,.ctlbtn.focused{animation:none;} }
   .keybox .code{font-size:38px;font-weight:700;letter-spacing:2px;line-height:.95;color:var(--perfect);text-shadow:var(--code-shadow);}
   .keybox .name{font-size:13px;color:var(--ink-dim);letter-spacing:1px;margin-top:2px;}
   .bpmbox{text-align:right;}
   .bpmbox .v{font-size:32px;font-weight:700;line-height:.95;}
   .bpmbox .u{font-size:11px;color:var(--ink-dim);letter-spacing:2px;}
-
-  .aim{text-align:center;min-height:16px;font-size:12px;letter-spacing:1px;color:var(--cursor);opacity:.9;}
-  .aim.locked{color:var(--ink-dim);opacity:.5;}
-  .aim b{font-weight:700;}
 
   .wheel-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;}
   svg{width:100%;height:100%;max-width:420px;max-height:420px;display:block;transition:transform .25s ease, opacity .25s ease;transform-origin:center center;}
@@ -126,13 +125,13 @@
 
   .ctlrow{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:2px;}
   .ctlbtn{font-family:inherit;font-size:15px;font-weight:800;letter-spacing:1px;color:var(--ink-mid);
-    background:rgba(255,255,255,.04);border:2px solid var(--seg-stroke);border-radius:999px;padding:7px 16px;cursor:pointer;
+    background:rgba(255,255,255,.04);border:2px dashed var(--seg-stroke);border-radius:999px;padding:7px 16px;cursor:pointer;
     transition:box-shadow .15s, border-color .15s, color .15s, transform .1s;min-width:64px;text-align:center;}
   .ctlbtn:active{transform:scale(.96);}
-  /* the FOCUSED control gets a strong, unmistakable highlight (this is the focus ring) */
-  .ctlbtn.focused{color:var(--ink);border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);background:rgba(255,255,255,.1);}
+  /* the FOCUSED control gets a strong, unmistakable solid pulsing glow */
+  .ctlbtn.focused{color:var(--ink);border-style:solid;border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);background:rgba(255,255,255,.1);animation:focuspulse 1.4s ease-in-out infinite;}
   .modepill{color:var(--relative);border-color:var(--relative);background:rgba(255,196,0,.08);}
-  .modepill.focused{color:#fff;border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);}
+  .modepill.focused{color:#fff;border-style:solid;border-color:var(--cursor);box-shadow:0 0 18px var(--cursor);animation:focuspulse 1.4s ease-in-out infinite;}
   .legend{text-align:center;font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.3px;line-height:1.4;opacity:.92;margin-top:4px;}
   .legend b{color:var(--perfect);font-weight:800;}
   /* daylight: push to maximum brightness */
@@ -195,8 +194,6 @@
         <div class="beatdots" id="beatdots"><span></span><span></span><span></span><span></span></div>
       </div>
     </div>
-
-    <div class="aim" id="aim"></div>
 
     <div class="wheel-wrap"><svg id="wheel" class="wheel" viewBox="0 0 400 400" aria-label="Camelot wheel"></svg></div>
 
@@ -299,26 +296,15 @@ function render(){
   bpmboxEl.classList.toggle("focused",cur==="bpm");
   wheel.classList.toggle("dimcursor",cur!=="key");
   document.body.dataset.focus = cur==="bpm"?"bpm":"key";
-  bpmUnitEl.textContent = cur==="bpm"?"▲ BPM ▼":"BPM";
+  document.body.dataset.ctrl = cur;
+  bpmUnitEl.textContent = cur==="bpm"?"BPM":"BPM";
   const ringBtn=document.getElementById("ringBtn"); if(ringBtn){ringBtn.classList.toggle("focused",cur==="ring"); ringBtn.textContent=letter+" · A/B";}
   const tempoBtn=document.getElementById("tempoBtn"); if(tempoBtn){tempoBtn.classList.toggle("focused",cur==="tempo"); tempoBtn.textContent=tempoLabel(TEMPOS[state.tempoIdx]);}
   const modeB=document.getElementById("modeBtn"); if(modeB)modeB.classList.toggle("focused",cur==="mode");
-
-  // status line — tells you what ▲▼ and select do on the focused control
-  const aim=document.getElementById("aim");
-  aim.className="aim";
-  const tip={
-    key:`KEY <b>${num}${letter}</b> — ▲▼ rotate · select steps`,
-    ring:`RING ${letter==="A"?"minor":"major"} — select flips A/B`,
-    bpm:`BPM ${state.bpm} — ▲▼ dial`,
-    tempo:`TEMPO ${tempoLabel(TEMPOS[state.tempoIdx])} — select cycles`,
-    mode:`VENUE ${MODES[state.modeIdx].label.replace(/^.\s/,"")} — select cycles`
-  };
-  aim.innerHTML = `◄ ► move &nbsp;·&nbsp; ${tip[cur]||""}`;
 }
 
-/* ===== focusable-control model (matches the glasses' native focus system) =====
-   Left/right swipe = move focus along this ring of controls.
+/* ===== focusable-control model =====
+   Left/right = cycle ONLY through selectable controls.
    Up/down = adjust the focused control. Select = activate it. */
 const CONTROLS=["key","ring","bpm","tempo","mode"];
 const clampBpm=v=>Math.max(40,Math.min(220,v));
@@ -417,7 +403,7 @@ window.addEventListener("keydown",e=>{
 });
 
 document.getElementById("hint").innerHTML=
-  "<b>◄ ►</b> move &nbsp; <b>▲ ▼</b> adjust &nbsp; <b>● select</b> activate";
+  "<b>◄ ►</b> switch control &nbsp; <b>▲ ▼</b> change &nbsp; <b>●</b> select";
 
 /* ===== rhythm-game beat engine — paced by selected BPM ===== */
 const AMP={inside:1, outside:.32, night:.7};
